@@ -1,0 +1,151 @@
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+
+''' Toolkit producing two-dimensional color plots and line plots of the probability ditribution for different two-slit experiments '''
+
+# ------Parameters and Variables-----#
+m=3.349e-26 # mass of the particles in kg
+h=6.626e-34 # Planck's constant in Js
+hbar=h/(2*np.pi) # Reduced Planck's constant
+sigma_0 = 10e-6  # standard deviation of the initial gaussian in the x and y directions in m
+dist_to_slit = .076 # distance from the center of the wavepacket to the slits in the z-direction in m
+sigma_k=2e8 # st. dev. of k in each direction
+
+#--Slit Positions-- in m #
+#(-inf)------slit1_front--slit1_back----------slit2_front--slit2_back-----------(+inf)
+slit1_front=-4e-6
+slit1_back=-2e-6
+slit2_front=2e-6
+slit2_back=4e-6
+
+#--grav and velocity--#
+# Either True or False for gravitational acceleration - if False, define velocity #
+grav=False
+v = 1.57 # if grav = False, in m/s
+
+#--list of distances and list of x-positions--#
+z_dist_list = np.linspace(1e-6,1e-3,150) # in m
+x_pos_list = np.linspace(-6e-6,6e-6,150) # in m
+
+#-------Line Plot Parameters-------#
+z_distance = 1e-3 # in m
+x_line_plot_pos_list = np.linspace(-10e-6,10e-6,100) # in m
+Fraunhofer = True # True or False - plot Fraunhofer approximation on line plot - v should be defined if True
+
+#-----------------------------------------------------------------------------------------------------------------#
+#---Functions and Plotting methods - do not need editing for new setups-------------------------------------------#
+#-----------------------------------------------------------------------------------------------------------------#
+def Kx(x_beta,t_beta,x_alpha,t_alpha):
+  '''Free Space Propagator in the x-direction Eq(29a)'''
+  coef = (m/(2j*np.pi*hbar*(t_beta-t_alpha)))**(1/2)
+  expo = (1j*m/hbar)*(((x_beta-x_alpha)**2)/(2*(t_beta-t_alpha)))
+  return coef*np.exp(expo)
+
+def s_0(t): 
+  '''Variable introduced after Eq(34)'''
+  return sigma_0*(1+1j*hbar*t/(2*m*sigma_0**2))
+
+def psi_x(x,t,k_0x):
+  '''wavefunction in the x-direction before the slits Eq(35) '''
+  v0x = hbar*k_0x/m
+  coef = (2*np.pi*(s_0(t)**2))**(-1/4)
+  real_exp = -1*((x-v0x*t)**2)/(4*sigma_0*s_0(t))
+  imag_exp = k_0x*(x-v0x*t)
+  return coef*np.exp(real_exp+1j*imag_exp)
+
+def t_gravity(z):
+  '''t and t1 for gravitaional acceleration Eq(33)'''
+  t1 = np.sqrt(2*dist_to_slit/9.8)
+  t= np.sqrt((2/9.8)*((z)+(1/2)*(9.8)*(t1**2)))
+  return t1,t
+
+def t_const_vel(z,v):
+  '''t and t1 for constant velocity Eqs(38a,b)'''
+  t1 = dist_to_slit/v
+  t = z/v + t1
+  return t1,t
+
+def one_slit_amplitude(x_list,slit_front,slit_back,z_dist,v=1.0,grav=False,slit_slice=2000,k_0x=0):
+  '''Amplitude for one slit Eq(37)'''
+  if grav == False:
+    t1,t = t_const_vel(z_dist,v)
+  if grav == True:
+    t1,t = t_gravity(z_dist)
+
+  x = x_list
+  xalist = np.linspace(slit_front,slit_back,slit_slice)
+  amplist = []
+  for y in x:
+    total_amp = 0
+    for xa in xalist:
+      amp = Kx(y,t,xa,t1)*psi_x(xa,t1,k_0x)
+      total_amp += amp
+    total_amp = total_amp*(slit_back-slit_front)/slit_slice
+    amplist.append(total_amp)
+  return amplist
+
+def two_slit_prob(x_list,slit1_front,slit1_back,slit2_front,slit2_back,z_dist,v=1.0,grav=False,slit1_slice=2000,slit2_slice=2000,k_0x=0):
+  '''Amplitude from two slits Eq(36), absolute square for probability Eqs(6,7)'''
+  if grav == False:
+    t1,t=t_const_vel(z_dist,v)
+  if grav == True:
+    t1,t = t_gravity(z_dist)
+
+  amplist1 = one_slit_amplitude(x_list,slit1_front,slit1_back,z_dist,v,grav,slit1_slice,k_0x)
+  amplist2 = one_slit_amplitude(x_list,slit2_front,slit2_back,z_dist,v,grav,slit2_slice,k_0x)
+
+  total_amp_list = np.array(amplist1)+np.array(amplist2)
+  return np.abs(total_amp_list)**2
+
+def prob_plot_over_dist(x_array,z_array,slit1_front,slit1_back,slit2_front,slit2_back,v=1.0,grav=False,slit1_slice=2000,slit2_slice=2000,k_0x=0):
+  '''Two-Dimensional Color Plot'''
+  matrix = np.zeros((len(z_array),len(x_array)))
+  for i in range(len(z_array)):
+    matrix[i] = two_slit_prob(x_array,slit1_front,slit1_back,slit2_front,slit2_back,z_array[i],v,grav,slit1_slice,slit2_slice,k_0x)
+  plt.imshow(matrix,cmap='jet',norm='linear')
+  xticklist = []
+  for j in np.linspace(x_array.min(),x_array.max(),11):
+    xticklist.append(np.format_float_positional(j*1e6, precision=4, unique=False, fractional=True, trim='0'))
+  zticklist = []
+  for k in np.linspace(z_array.min(),z_array.max(),11):
+    zticklist.append(np.format_float_positional(k*1e6, precision=4, unique=False, fractional=True, trim='0'))
+  plt.xticks(np.linspace(0,len(x_array)-1,11),xticklist,rotation=30);
+  plt.yticks(np.linspace(0,len(z_array)-1,11),zticklist);
+  plt.xlabel('x in $\mu$m')
+  plt.ylabel('z in $\mu$m')
+  plt.show()
+
+#Fraunhofer Approximation Code#
+#Eqs(1a-c)
+#Fig 1
+# a and b are as shown in Fig 1
+def sin_theta(x,dist):
+  return((x)/np.sqrt(x**2+dist**2))
+
+def beta(x,dist,k,b):
+  return (1/2)*k*b*sin_theta(x,dist)
+
+def alpha(x,dist,k,a):
+  return(1/2)*k*a*sin_theta(x,dist)
+
+def fraun_dist(x,dist,k,b,a):
+  return ((np.sin(beta(x,dist,k,b))/beta(x,dist,k,b))**2)*((np.cos(alpha(x,dist,k,a)))**2)
+
+def line_plot(x_list,slit1_front,slit1_back,slit2_front,slit2_back,z_dist,k,b,a,Fraunhofer,v=1.0,grav=False,slit1_slice=2000,slit2_slice=2000,k_0x=0):
+  plt.plot(x_list,two_slit_prob(x_list,slit1_front,slit1_back,slit2_front,slit2_back,z_dist,v,grav),label='Probability')
+  if Fraunhofer == True:
+    scale = max(two_slit_prob(x_list,slit1_front,slit1_back,slit2_front,slit2_back,z_dist,v,grav))
+    plt.plot(x_list,scale*fraun_dist(x_list,z_dist,k,b,a),linestyle='--',color='orange',label='Fraunhofer')
+    plt.legend()
+  plt.show()
+
+#-----------------------------------------------------------------------------------------------------------------#
+#---Plotting------------------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------------------------#
+
+prob_plot_over_dist(x_pos_list,z_dist_list,slit1_front,slit1_back,slit2_front,slit2_back,v,grav)
+k = m*v/hbar
+b = slit2_back - slit2_front
+a = (slit2_back + slit2_front)/2 - (slit1_back + slit1_front)/2 
+line_plot(x_line_plot_pos_list,slit1_front,slit1_back,slit2_front,slit2_back,z_distance,k,b,a,Fraunhofer,v,grav)
